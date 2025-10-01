@@ -44,14 +44,14 @@ void loop() {
 
   // --- Step 2: Map the Distance to the Potentiometer Value ---
   // Maps the 5cm-20cm distance range to the 0-99 wiper range.
-  int potVal = map(cm, 1, 50, 0, 99);
+  int potVal = map(cm, 30, 50, 0, 99);
   
   // Constrain the pot value to ensure it stays within the valid 0-99 range.
   // This handles cases where the distance is outside the 5-20cm range.
   potVal = constrain(potVal, 0, 99);
 
 
-pot.setPot(potVal,true); //update the pot
+pot.setPot(potVal,false); //update the pot
 
 
   // --- Step 4: Print Status to Serial Monitor for Debugging ---
