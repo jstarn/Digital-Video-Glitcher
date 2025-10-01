@@ -1,0 +1,68 @@
+//Digital Glitch Mixer v1.2
+//by Po8aster
+//Based on the library Arduino-X9C by Phil Bowles (https://github.com/philbowles/Arduino-X9C)
+
+
+
+#include <X9C.h>
+
+#define INC 8   // D1 Mini D4 - pulled up in H/W (10k) ->  chip pin 1
+#define UD 9   // D1 Mini D8                          ->  chip pin 2
+#define CS  10  // D1 Mini D0 - pulled up in H/W (10k) ->  2nd chip pin 7
+
+// Pin configuration for the HC-SR04 Ultrasonic Sensor (Arduino Uno)
+#define TRIG_PIN 6
+#define ECHO_PIN 7
+
+X9C pot;         // create a pot controller
+
+void setup() {
+  Serial.begin(115200);
+  pot.begin(CS,INC,UD);
+  Serial.println("Ultrasonic Video Mixer Initialized");
+  Serial.println("Control Method: Linear Gradient");
+
+    // Initialize the digital potentiometer
+  pot.begin(CS, INC, UD);
+
+    // Initialize the ultrasonic sensor pins
+  pinMode(TRIG_PIN, OUTPUT);
+  pinMode(ECHO_PIN, INPUT);
+}
+
+void loop() {
+  // --- Step 1: Measure Distance with Ultrasonic Sensor ---
+  
+  digitalWrite(TRIG_PIN, LOW);
+  delayMicroseconds(2);
+  digitalWrite(TRIG_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIG_PIN, LOW);
+  
+  long duration = pulseIn(ECHO_PIN, HIGH);
+  int cm = duration * 0.0343 / 2;
+
+  // --- Step 2: Map the Distance to the Potentiometer Value ---
+  // Maps the 5cm-20cm distance range to the 0-99 wiper range.
+  int potVal = map(cm, 1, 50, 0, 99);
+  
+  // Constrain the pot value to ensure it stays within the valid 0-99 range.
+  // This handles cases where the distance is outside the 5-20cm range.
+  potVal = constrain(potVal, 0, 99);
+
+
+pot.setPot(potVal,true); //update the pot
+
+
+  // --- Step 4: Print Status to Serial Monitor for Debugging ---
+  Serial.print("Distance: ");
+  Serial.print(cm);
+  Serial.print(" cm  ->  Wiper Position: ");
+  Serial.println(potVal);
+
+//}
+//else{
+//}
+//potValLast = potVal; //update value tracking
+delay; //wait a bit before looping
+}
