@@ -13,3 +13,5 @@ MCP4101 digital pot to crossfade between two video signals.
 VL503X Ultrasonic sensor mapped to send proximity distance within 0-100 range value of digipot. <50 towards channel 1, >50 towards channel 2 with a gradual transistion between. 
 
 .1uF capacitor between VCC and VSS. 
+
+Example video of final art installation: https://youtu.be/_PkSjmun7yo?si=QDMwasAmug46awkS
