@@ -1,68 +1,68 @@
-//Digital Glitch Mixer v1.2
-//by Po8aster
-//Based on the library Arduino-X9C by Phil Bowles (https://github.com/philbowles/Arduino-X9C)
 
+#include <SPI.h>
+#include <Wire.h>
+#include <Adafruit_VL53L0X.h>
 
+// --- Pin Definitions ---
+const int DIGIPOT_CS_PIN = 10; // Chip Select for MCP41010
 
-#include <X9C.h>
+// --- Mapping Settings ---
+const int DIST_NEAR_MM = 1000;   // 50 cm -> Video 1 (Value 0)
+const int DIST_FAR_MM  = 2000;  // 250 cm -> Video 2 (Value 255)
 
-#define INC 8   // D1 Mini D4 - pulled up in H/W (10k) ->  chip pin 1
-#define UD 9   // D1 Mini D8                          ->  chip pin 2
-#define CS  10  // D1 Mini D0 - pulled up in H/W (10k) ->  2nd chip pin 7
+// --- Objects ---
+Adafruit_VL53L0X lox = Adafruit_VL53L0X();
 
-// Pin configuration for the HC-SR04 Ultrasonic Sensor (Arduino Uno)
-#define TRIG_PIN 6
-#define ECHO_PIN 7
-
-X9C pot;         // create a pot controller
+// --- Smoothing Variable ---
+float smoothedPot = 0; 
 
 void setup() {
   Serial.begin(115200);
-  pot.begin(CS,INC,UD);
-  Serial.println("Ultrasonic Video Mixer Initialized");
-  Serial.println("Control Method: Linear Gradient");
+  while (!Serial);
 
-    // Initialize the digital potentiometer
-  pot.begin(CS, INC, UD);
+  Serial.println("--- Smoothed Video Switcher ---");
 
-    // Initialize the ultrasonic sensor pins
-  pinMode(TRIG_PIN, OUTPUT);
-  pinMode(ECHO_PIN, INPUT);
+  // 1. Init Digipot
+  pinMode(DIGIPOT_CS_PIN, OUTPUT);
+  digitalWrite(DIGIPOT_CS_PIN, HIGH);
+  SPI.begin();
+  
+  // 2. Init Sensor
+  Wire.begin();
+  if (!lox.begin()) {
+    Serial.println(F("Failed to boot VL53L0X"));
+    while (1);
+  }
+  lox.startRangeContinuous();
+  Serial.println("System Ready.");
 }
 
 void loop() {
-  // --- Step 1: Measure Distance with Ultrasonic Sensor ---
-  
-  digitalWrite(TRIG_PIN, LOW);
-  delayMicroseconds(2);
-  digitalWrite(TRIG_PIN, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(TRIG_PIN, LOW);
-  
-  long duration = pulseIn(ECHO_PIN, HIGH);
-  int cm = duration * 0.0343 / 2;
+  if (lox.isRangeComplete()) {
+    int distance = lox.readRange();
+    
+    // 1. Map raw distance to target value
+    int target = map(distance, DIST_NEAR_MM, DIST_FAR_MM, 0, 255);
+    target = constrain(target, 0, 255);
 
-  // --- Step 2: Map the Distance to the Potentiometer Value ---
-  // Maps the 5cm-20cm distance range to the 0-99 wiper range.
-  int potVal = map(cm, 30, 50, 0, 99);
-  
-  // Constrain the pot value to ensure it stays within the valid 0-99 range.
-  // This handles cases where the distance is outside the 5-20cm range.
-  potVal = constrain(potVal, 0, 99);
+    // 2. Apply Smoothing Algorithm
+    // The 0.2 factor makes it responsive but removes jitter.
+    // If it feels too slow, change 0.2 to 0.5.
+    smoothedPot = (smoothedPot * 0.8) + (target * 0.2); 
 
+    int finalOutput = (int)smoothedPot;
 
-pot.setPot(potVal,false); //update the pot
+    // 3. Send to Digipot
+    digitalWrite(DIGIPOT_CS_PIN, LOW);
+    SPI.transfer(0x11); // Command byte for MCP41010
+    SPI.transfer(finalOutput);
+    digitalWrite(DIGIPOT_CS_PIN, HIGH);
 
-
-  // --- Step 4: Print Status to Serial Monitor for Debugging ---
-  Serial.print("Distance: ");
-  Serial.print(cm);
-  Serial.print(" cm  ->  Wiper Position: ");
-  Serial.println(potVal);
-
-//}
-//else{
-//}
-//potValLast = potVal; //update value tracking
-delay; //wait a bit before looping
+    // --- NEW DEBUG LOG ---
+    // Prints: Distance (mm) -> Pot Value (0-255)
+    Serial.print("Dist: "); 
+    Serial.print(distance); 
+    Serial.print(" mm  ->  Pot: "); 
+    Serial.println(finalOutput);
+  }
 }
