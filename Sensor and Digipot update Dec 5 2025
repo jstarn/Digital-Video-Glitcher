@@ -1,0 +1,67 @@
+#include <SPI.h>
+#include <Wire.h>
+#include <Adafruit_VL53L0X.h>
+
+// --- Pin Definitions ---
+const int DIGIPOT_CS_PIN = 10; // Chip Select for MCP41010
+
+// --- Mapping Settings ---
+const int DIST_NEAR_MM = 1000;   // 50 cm -> Video 1 (Value 0)
+const int DIST_FAR_MM  = 2000;  // 250 cm -> Video 2 (Value 255)
+
+// --- Objects ---
+Adafruit_VL53L0X lox = Adafruit_VL53L0X();
+
+// --- Smoothing Variable ---
+float smoothedPot = 0; 
+
+void setup() {
+  Serial.begin(115200);
+  while (!Serial);
+
+  Serial.println("--- Smoothed Video Switcher ---");
+
+  // 1. Init Digipot
+  pinMode(DIGIPOT_CS_PIN, OUTPUT);
+  digitalWrite(DIGIPOT_CS_PIN, HIGH);
+  SPI.begin();
+  
+  // 2. Init Sensor
+  Wire.begin();
+  if (!lox.begin()) {
+    Serial.println(F("Failed to boot VL53L0X"));
+    while (1);
+  }
+  lox.startRangeContinuous();
+  Serial.println("System Ready.");
+}
+
+void loop() {
+  if (lox.isRangeComplete()) {
+    int distance = lox.readRange();
+    
+    // 1. Map raw distance to target value
+    int target = map(distance, DIST_NEAR_MM, DIST_FAR_MM, 0, 255);
+    target = constrain(target, 0, 255);
+
+    // 2. Apply Smoothing Algorithm
+    // The 0.2 factor makes it responsive but removes jitter.
+    // If it feels too slow, change 0.2 to 0.5.
+    smoothedPot = (smoothedPot * 0.8) + (target * 0.2); 
+
+    int finalOutput = (int)smoothedPot;
+
+    // 3. Send to Digipot
+    digitalWrite(DIGIPOT_CS_PIN, LOW);
+    SPI.transfer(0x11); // Command byte for MCP41010
+    SPI.transfer(finalOutput);
+    digitalWrite(DIGIPOT_CS_PIN, HIGH);
+
+    // --- NEW DEBUG LOG ---
+    // Prints: Distance (mm) -> Pot Value (0-255)
+    Serial.print("Dist: "); 
+    Serial.print(distance); 
+    Serial.print(" mm  ->  Pot: "); 
+    Serial.println(finalOutput);
+  }
+}
